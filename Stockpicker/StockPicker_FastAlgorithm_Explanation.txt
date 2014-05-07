@@ -1,0 +1,102 @@
+﻿Fast Algorithm for Stockpicker Problem (N-time instead of N^2 -time)
+
+Phase 1: Extract Price Trend Data from our current Price Level Data
+
+Description: The fluctuations in prices can be alternatively thought of a series of upswings and downswings (e.g. During the first four days, there was a continuous upswing summing to +12 points, whereas during the next two days, there was a steep dropoff totaling -18 points). Here I intend to generate that data from the price data we are given. 
+
+For example, from the price array [ 44, 30, 24, 32, 35, 30, 40, 38 ], we would want to generate the array of up- and downswing values: [-20, +11, -5, +10, -2] .
+
+However, because our end goal is to generate not potential profit to be made but the date indices of our ideal buy-date and sell-date, we will want to also keep track of the associated start- and end- dates for these swings. Thus, we really want an array of 3-element arrays ( [price change, start date, end date]), which I will refer to as “blocks”.
+
+Thus, for our given data set, we want to generate the following alternating “block chain” :
+[ [-20, 0, 2], [+11, 2, 4], [-5, 4, 5] , [+10, 5, 6], [-2, 6, 7] ]
+
+Algorithm:
+I do so as with the following general algorithm:
+Note: N will be the number of prices in our price array.
+
+(A) For all i in 0..N-1 
+	(1) Compute the one-day change: diff = prices[i+1] – prices[i]
+	(2) (i) If the sign of diff is consistent with the current block's sign,
+		then add that diff to the accumulating value of the current block
+	     (ii) If instead the sign of diff is different from that of the current block,
+		then terminate the old block and begin a new block.
+
+Runtime: Each day-to-day difference is handled with a constant upper bound for the number of steps, and there are N-1 differences. Thus, in time proportional to N we can generate a block-chain of price-swing data from prices data.
+
+
+Phase 2: Combine and parse down the block chain until we arrive at a single block containing the information for the max possible profit and accompanying date indices. 
+
+Description: Having the block chain is useful because now we have a new approach to the problem; we will have determined the profit-maximizing stock-picking timeframe if we can isolate the subsequence of consecutive blocks whose values have the highest total sum.
+
+For example,  a sub-series of the first four blocks from our given data would yield a net profit of (-20) + 11 + (-5) + 10  = -4. Since this is a low profit, we are tipped off that it would be bad to buy on day 0 and sell on the day that corresponds to the end of the fourth block. 
+
+As it turns out, the sub-series of blocks 2 through 4 produce the highest possible sum of 
+11 + (-5) + 10 = 16, and block 2 starts on day 2 and block 4 ends on day 6, which produces the correct solution of (2, 6).
+
+Note: The purpose for blocking up the swings in price should now start becoming clear. You would never choose a trading period that is a proper subset of a larger positive swing, since there would clearly be more profitable days that you could take advantage of by buying a few days earlier or selling a few days later. Further, the only purpose for extending your trading window beyond a positive block into negative blocks would be because you needed to traverse the negative blocks in order to reach and exploit the positive blocks on the other side. Thus, you would never extend your trading window to cover only a portion of a negative block. If you covered any part of a negative block, you would necessarily cover all of that negative block in addition to all of its neighboring positive block.
+
+So how do we go about finding the maximally profitable subsequence of blocks? I've come up with an algorithm that identifies the subsequence in time proportional to N. Though it can be proven that the algorithm does guarantee the correct solution, it is not easy to explain why this is true, so I will state the algorithm first and then try to sketch the ideas of the proof afterwards.
+
+The basic idea of the algorithm is that we will repeatedly shrink the block chain, deleting blocks when we know they can not possibly contribute to the max-profit subsequence and combining triplets of blocks when we know that if any of those blocks contribute to the max-profit subsequence, then it can only be in the case that all the three together form a component of the max-profit subsequence.
+
+Further, we will always be working from the ends of the block chain (alternating when necessary), as we will be able to reason rigorously about subsequences on the ends and shrink the block-chain systematically.
+
+The algorithm requires us to know the largest positive value that a single block contains. This is information we could have stored during Phase 1.
+
+Algorithm:
+Here is the general algorithm for shrinking the block-chain to a single block: 
+(0) Trim the ends of block chain of any negative blocks – because any subsequence containing a negative end-block is inferior to a subsequence stopping just short of containing that negative end-block.
+
+(1)   If there is only one block in the chain, then you are done.
+
+(2) 	Query an arbitrary end-block. If that end-block's value is greater than or equal to the max-value-seen, then reset the max-value-seen to equal this end-block's value and then query the opposite end-block.
+
+(3)	 (a) If the queried end-block has a value of magnitude less than or equal to that of its neighboring (negative) block, then CHOP both them – delete both of those two end-blocks from the chain. Return to Step 1.
+	(b) Otherwise, COMBINE those two blocks with their next (positive) neighbor –- delete that subsequence of three blocks from the chain and replace it with a single block whose value is the sum of the three blocks' values and whose start- and end-dates  span those of the three (Note the sum will always be positive – since otherwise our CHOP condition would have occurred). Return to Step 1.
+
+Note: In either case, after Step 3 the block chain is two blocks shorter.
+
+After this is complete, the single resulting block will contain the information for the max-profit start- and end-dates as well the max profit to be gained.
+
+Example: Using our given price data, we would get the following block-chain: 
+blocks = [ [-20, 0, 2], [+11, 2, 4], [-5, 4, 5] , [+10, 5, 6], [-2, 6, 7] ]
+max-value = +11
+
+The algorithm would operate on this chain as follows:
+(0) 	Trim
+	→ delete  [-20, 0, 2] and [-2, 6, 7]
+	→ blocks = [+11, 2, 4], [-5, 4, 5] , [+10, 5, 6]
+
+(1) block chain has more than 1 block in it
+
+(2) query [+11, 2, 4]
+→ query_block_value == 11 == max_value
+	→ max_value = 11
+	→ query opposite end : [+10, 5, 6] 
+
+(3) query_block_value == 11  vs. magnitude (neighbor_block_value == 10)
+	→ COMBINE (query_block, neighbor_block, next_neighbor_block)
+		→ [+11, 2, 4], [-5, 4, 5] , [+10, 5, 6] ==> [+16, 2, 6]
+
+(1) block chain has 1 block in it
+
+==> Our max profit to be earned is 16 points, and that occurs from buying on day 2 and selling on day 6.
+
+Runtime: There is a constant upperbound on the number of steps for each iteration. Each iteration removes two blocks from the chain. The number of blocks is in the worst case equal to N-1. Thus, this phase occurs in time proportional to N. 
+
+Conclusion: Phase 1 + Phase 2 has runtime proportional to N, which beats the previous algorithm's N^2 time.
+
+
+Proof of Solution Guarantee: Here are the basic ideas for why the algorithm guarantees a solution.
+
+Either the maximum profit is achieved by using a single block or by using a currently uncombined subsequence of blocks in the chain.
+
+If the the end-block you're looking is the single block with highest value yet seen, then we don't want to mess with it by combining it or chopping it, because we might lower or lose its value.
+But if it's not (either because there is another block that exceeds it or ties it), then either that end block contributes to the max possible profit by linking to a subsequence or that end-block doesn't contribute at all. Thus, we either must chop it off (and if we do, we would want to instantly trim its negative neighbor) or we must link to the subsequence by combining it through its negative neighbor so it can link up with its nearest possible positive block.
+
+If its negative neighbor block's magnitude exceeds the end-block's then we know then the candidate subsequence on the other side of the neighbor would only be harmed if you were to link that subsequence with the end-block and the negative neighbor (since their combined net contribution would be negative).
+
+But if the end-block's value exceeds the negative neighbor's, then we are guaranteed that the candidate subsequence would be helped by linking that subsequence up with the end block and its negative neighbor (whose combined net value would be positive).
+
+Thus, we continually whittle away at the ends of the block chain, knowing that each in each step we're either chopping blocks that can only harm the max-value subsequence or combining blocks that can only help the max-value chain. Hence, we will inevitably close in on our solution.
